@@ -1,0 +1,40 @@
+# System Configuration
+# Disable unnecessary services and protocols
+$servicesToDisa/ble = @("Spooler")
+foreach ($service in $servicesToDisable) {
+    try {
+        Stop-Service -Name $service -ErrorAction Stop
+        Set-Service -Name $service -StartupType Disabled
+    } catch {
+        Write-Host "Failed to disable service: $service"
+    }
+}
+
+# Apply the latest security updates and patches
+$wuSession = New-Object -ComObject "Microsoft.Update.Session"
+$updatesToInstall = $wuSession.CreateUpdateSearcher().Search("IsInstalled=0").Updates
+$installer = $wuSession.CreateUpdateInstaller()
+$installer.Updates = $updatesToInstall
+$installationResult = $installer.Install()
+if ($installationResult.ResultCode -eq 2) {
+    Write-Host "Installation completed successfully."
+} else {
+    Write-Host "Installation failed. Result code: $($installationResult.ResultCode)"
+}
+
+# Configure account lockout policies
+$accountLockoutPolicy = @{
+    "LockoutBadCount" = 5
+    "ResetLockoutCount" = 15
+    "LockoutDuration" = (New-TimeSpan -Minutes 15)
+}
+secedit.exe /configure /db C:\Windows\Security\local.sdb /cfg C:\Windows\Security\local.cfg /areas SECURITYPOLICY /log C:\Windows\Security\secedit.log
+
+# Enable strong password policies
+$secpasswd = ConvertTo-SecureString -String "P@ssw0rdP0licy" -AsPlainText -Force
+$seccredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList "Administrator", $secpasswd
+
+# Enable auditing of successful and failed logon attempts
+auditpol /set /subcategory:"Logon" /success:enable /failure:enable
+
+Jeremy Patton-/5/19/2023
